@@ -1,0 +1,9 @@
+__MACOSX
+.env
+lob.csv
+trades.csv
+backtest
+.claude
+.cursor
+build/
+ob_and_trades.zip
