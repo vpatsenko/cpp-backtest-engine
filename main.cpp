@@ -139,22 +139,22 @@ int main(int argc, char* argv[]) {
         } else if (strategy_name == "stoikov-limit") {
             std::cout << "\nRunning backtest with Stoikov Limit Order Market Making\n";
             std::cout << "Strategy Parameters:\n";
-            std::cout << "  Gamma (risk aversion):   0.05\n";
-            std::cout << "  Kappa (arrival rate):    2.0\n";
+            std::cout << "  Gamma (risk aversion):   0.1 (increased)\n";
+            std::cout << "  Kappa (arrival rate):    1.5\n";
             std::cout << "  Time horizon:            300 seconds\n";
             std::cout << "  Order quantity:          15,000 units\n";
             std::cout << "  Max inventory:           100,000 units\n";
-            std::cout << "  Min spread:              0.00001 (1 tick)\n";
-            std::cout << "  Refresh threshold:       0.0002 (2bp)\n";
+            std::cout << "  Min spread:              0.00005 (5 ticks - WIDENED)\n";
+            std::cout << "  Refresh threshold:       0.0001 (1bp - more aggressive)\n";
             std::cout << "\n";
             strategy = std::make_shared<StoikovLimitOrderStrategy>(
-                0.05,      // gamma - risk aversion
-                2.0,       // kappa - arrival rate
+                0.1,       // gamma - risk aversion (doubled from 0.05)
+                1.5,       // kappa - arrival rate (reduced to widen spread)
                 300.0,     // time_horizon - 5 minutes
                 15000.0,   // order_quantity
                 100000.0,  // max_inventory
-                0.00001,   // min_spread - 1 tick
-                0.0002     // refresh_threshold - 2bp move
+                0.00005,   // min_spread - 5 ticks (5x wider)
+                0.0001     // refresh_threshold - 1bp (refresh more often)
             );
 
         } else if (strategy_name == "stoikov-market") {
