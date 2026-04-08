@@ -13,16 +13,26 @@ endif()
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 
-# Sources
-add_executable(backtest
-    main.cpp
-    backtest.cpp
+# Common sources from src/
+set(COMMON_SOURCES
+    src/core/market_state.cpp
+    src/core/portfolio.cpp
+    src/core/replay_engine.cpp
+    src/execution/execution_model.cpp
+    src/execution/exchange_simulator.cpp
+    src/data/data_loader.cpp
+    src/utils/performance_tracker.cpp
 )
 
-# Headers
-target_include_directories(backtest PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-# Enable warnings
+# Main backtest executable with multiple strategy support
+add_executable(backtest
+    main.cpp
+    ${COMMON_SOURCES}
+)
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(backtest PRIVATE -Wall -Wextra -pedantic)
 elseif(MSVC)

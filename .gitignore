@@ -5,5 +5,6 @@ trades.csv
 backtest
 .claude
 .cursor
+.vscode/
 build/
 ob_and_trades.zip
