@@ -1,26 +1,25 @@
 #include "portfolio.h"
 #include <cmath>
-#include <algorithm>
 
 namespace backtest {
 
 void Portfolio::apply_fill(Side side, double price, double quantity, double fee) {
-    int sign = static_cast<int>(side);
+    int64_t sign = static_cast<int64_t>(side);
     double old_position = position_;
 
     // Update position
-    position_ += sign * quantity;
+    position_ += quantity * sign;
 
     // Update cash
-    cash_ -= sign * quantity * price + fee;
+    cash_ -= quantity * price * sign + fee;
 
     // Update realized PnL (FIFO-style)
-    if (old_position * position_ < 0.0) {  // Position flip
+    if ((old_position * position_) < 0.0) {  // Position flip
         double closed_qty = std::min(std::abs(old_position), quantity);
-        realized_pnl_ += -sign * closed_qty * (price - avg_entry_price_);
+        realized_pnl_ += closed_qty * (price - avg_entry_price_) * (-sign);
     } else if (std::abs(position_) < std::abs(old_position)) {  // Reducing position
         double closed_qty = std::abs(old_position) - std::abs(position_);
-        realized_pnl_ += -sign * closed_qty * (price - avg_entry_price_);
+        realized_pnl_ += closed_qty * (price - avg_entry_price_) * (-sign);
     }
 
     // Update average entry price

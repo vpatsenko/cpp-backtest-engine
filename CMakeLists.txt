@@ -4,6 +4,9 @@ project(cmf_backtest CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Find Boost (header-only libraries)
+find_package(Boost REQUIRED)
+
 # Build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
@@ -37,4 +40,15 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(backtest PRIVATE -Wall -Wextra -pedantic)
 elseif(MSVC)
     target_compile_options(backtest PRIVATE /W4)
+endif()
+
+# Example executable to compare decimal types
+add_executable(example
+    example.cpp
+)
+target_include_directories(example PRIVATE ${Boost_INCLUDE_DIRS})
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(example PRIVATE -Wall -Wextra -pedantic)
+elseif(MSVC)
+    target_compile_options(example PRIVATE /W4)
 endif()

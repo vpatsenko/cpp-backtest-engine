@@ -69,7 +69,7 @@ public:
         double sigma_per_second = (mid_price * sigma) / std::sqrt(seconds_per_year);
 
         // Reservation price: r = mid - q * gamma * sigma^2 * T
-        double reservation_price = mid_price - inventory_ * gamma_ * sigma_per_second * sigma_per_second * time_remaining;
+        double reservation_price = mid_price - (inventory_ * gamma_ * sigma_per_second * sigma_per_second * time_remaining);
 
         // Debug output (first time only)
         if (tick_count_ == 100) {
@@ -81,7 +81,7 @@ public:
         // Optimal spread: delta = (1/gamma) * ln(1 + gamma/kappa)
         // Scale spread to be reasonable relative to price (theory gives absolute values)
         double delta_bps = (1.0 / gamma_) * std::log(1.0 + gamma_ / kappa_);  // In basis points
-        double delta = mid_price * delta_bps * 0.0001;  // Convert to price units
+        double delta = mid_price * (delta_bps * 0.0001);  // Convert to price units
         delta = std::max(delta, min_spread_ * 2.0);  // Ensure minimum spread
         delta = std::min(delta, mid_price * 0.02);   // Cap at 2% of mid price
 
@@ -90,17 +90,14 @@ public:
         double target_ask = reservation_price + delta / 2.0;
 
         // Inventory skewing: adjust quote sizes based on inventory
-        double bid_quantity = order_quantity_;
-        double ask_quantity = order_quantity_;
+        double inv_ratio = inventory_ / max_inventory_;
+        double bid_quantity = order_quantity_ * (1.0 - inv_ratio);
+        double ask_quantity = order_quantity_ * (1.0 + inv_ratio);
 
         if (max_inventory_ > 0) {
-            double inventory_ratio = inventory_ / max_inventory_;
-            bid_quantity = order_quantity_ * (1.0 - inventory_ratio);
-            ask_quantity = order_quantity_ * (1.0 + inventory_ratio);
+            bid_quantity = std::max(bid_quantity, 1000.0);
+            ask_quantity = std::max(ask_quantity, 1000.0);
         }
-
-        bid_quantity = std::max(bid_quantity, 1000.0);
-        ask_quantity = std::max(ask_quantity, 1000.0);
 
         // Ensure bid < ask (no crossing)
         if (target_bid >= target_ask) {
@@ -122,8 +119,8 @@ public:
 
     void on_fill(uint64_t timestamp, const Fill& fill) override {
         // Update inventory
-        int sign = static_cast<int>(fill.side);
-        inventory_ += sign * fill.quantity;
+        int64_t sign = static_cast<int64_t>(fill.side);
+        inventory_ += fill.quantity * sign;
 
         std::cout << "Fill at " << timestamp << ": "
                   << (fill.side == Side::BUY ? "BUY" : "SELL")

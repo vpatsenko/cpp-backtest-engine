@@ -97,7 +97,7 @@ void ExchangeSimulator::checkCrosses(uint64_t timestamp) {
                 it->filled_quantity += fill.quantity;
             }
 
-            // Remove if fully filled (use small epsilon for float comparison)
+            // Remove if fully filled
             if (it->remaining_quantity() <= 0.0001) {
                 it = buy_orders_.erase(it);
             } else {

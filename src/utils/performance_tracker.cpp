@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <ctime>
+#include <cmath>
 
 namespace backtest {
 
@@ -171,17 +172,18 @@ void PerformanceTracker::calculate_trade_statistics(double& avg_win, double& avg
     largest_loss = 0.0;
 
     for (const auto& trade : trade_log_) {
+        double pnl = trade.realized_pnl_delta;
         if (trade.realized_pnl_delta > 0.0) {
-            total_wins += trade.realized_pnl_delta;
+            total_wins += pnl;
             num_wins++;
-            if (trade.realized_pnl_delta > largest_win) {
-                largest_win = trade.realized_pnl_delta;
+            if (pnl > largest_win) {
+                largest_win = pnl;
             }
         } else if (trade.realized_pnl_delta < 0.0) {
-            total_losses += trade.realized_pnl_delta;
+            total_losses += pnl;
             num_losses++;
-            if (trade.realized_pnl_delta < largest_loss) {
-                largest_loss = trade.realized_pnl_delta;
+            if (pnl < largest_loss) {
+                largest_loss = pnl;
             }
         }
     }

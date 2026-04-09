@@ -52,11 +52,12 @@ public:
         double time_remaining = time_horizon_;
 
         // Reservation price: r = mid - q * gamma * sigma^2 * T
-        double reservation_price = mid_price - inventory_ * gamma_ * sigma * sigma * time_remaining;
+        double reservation_price = mid_price - (inventory_ * gamma_ * sigma * sigma * time_remaining);
 
         // Optimal spread: delta = (1/gamma) * ln(1 + gamma/kappa)
-        double delta = (1.0 / gamma_) * std::log(1.0 + gamma_ / kappa_);
-        delta = std::max(delta, min_spread_ * 3.0);  // Ensure reasonable spread
+        double delta_val = (1.0 / gamma_) * std::log(1.0 + gamma_ / kappa_);
+        delta_val = std::max(delta_val, min_spread_ * 3.0);  // Ensure reasonable spread
+        double delta = delta_val;
 
         // Calculate target bid and ask prices (our theoretical quotes)
         double target_bid = reservation_price - delta / 2.0;
@@ -67,23 +68,20 @@ public:
         double market_best_ask = market.best_ask();
 
         // Inventory skewing: trade to reduce inventory
-        double bid_quantity = order_quantity_;
-        double ask_quantity = order_quantity_;
+        double inv_ratio = inventory_ / max_inventory_;
+        double bid_quantity = order_quantity_ * (1.0 - inv_ratio);
+        double ask_quantity = order_quantity_ * (1.0 + inv_ratio);
 
         if (max_inventory_ > 0) {
-            double inventory_ratio = inventory_ / max_inventory_;
-            bid_quantity = order_quantity_ * (1.0 - inventory_ratio);
-            ask_quantity = order_quantity_ * (1.0 + inventory_ratio);
+            bid_quantity = std::max(bid_quantity, 1000.0);
+            ask_quantity = std::max(ask_quantity, 1000.0);
         }
-
-        bid_quantity = std::max(bid_quantity, 1000.0);
-        ask_quantity = std::max(ask_quantity, 1000.0);
 
         // Market making logic with market orders:
         // - Buy if market ask is below our target ask (cheap offer available)
         // - Sell if market bid is above our target bid (good bid available)
 
-        if (market_best_ask > 0 && market_best_ask < target_ask && inventory_ < max_inventory_) {
+        if (market_best_ask > 0.0 && market_best_ask < target_ask && inventory_ < max_inventory_) {
             // Market is offering to sell below our target ask - buy it
             Order buy_order;
             buy_order.side = Side::BUY;
@@ -91,7 +89,7 @@ public:
             buy_order.price = 0.0;  // Market order
             submit_order(buy_order);
         }
-        else if (market_best_bid > 0 && market_best_bid > target_bid && inventory_ > -max_inventory_) {
+        else if (market_best_bid > 0.0 && market_best_bid > target_bid && inventory_ > -max_inventory_) {
             // Market is bidding above our target bid - sell to it
             Order sell_order;
             sell_order.side = Side::SELL;
@@ -111,8 +109,8 @@ public:
 
     void on_fill(uint64_t timestamp, const Fill& fill) override {
         // Update inventory
-        int sign = static_cast<int>(fill.side);
-        inventory_ += sign * fill.quantity;
+        int64_t sign = static_cast<int64_t>(fill.side);
+        inventory_ += fill.quantity * sign;
 
         std::cout << "Fill at " << timestamp << ": "
                   << (fill.side == Side::BUY ? "BUY" : "SELL")

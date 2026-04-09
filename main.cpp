@@ -15,6 +15,7 @@ public:
         : window_size_(window_size), trade_size_(trade_size) {}
 
     void on_book_update(uint64_t timestamp, const MarketState& market) override {
+        (void)timestamp;
         double microprice = market.microprice();
         if (microprice <= 0.0) return;
 

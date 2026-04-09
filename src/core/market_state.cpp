@@ -20,7 +20,7 @@ double MarketState::microprice() const {
     double bid_price = bids_[0].price;
     double ask_price = asks_[0].price;
 
-    if (bid_size + ask_size == 0.0) return mid_price();
+    if ((bid_size + ask_size) == 0.0) return mid_price();
 
     return (bid_size * ask_price + ask_size * bid_price) / (bid_size + ask_size);
 }
