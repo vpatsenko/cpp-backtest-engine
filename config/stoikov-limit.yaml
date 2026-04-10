@@ -1,0 +1,18 @@
+# Configuration for Stoikov Limit Order Market Making Strategy
+# Posts limit orders at theoretical bid/ask and earns the spread
+
+backtest:
+  initial_cash: 100000.0  # Starting capital in USD
+  lob_path: "lob.csv"     # Path to limit order book data
+  trades_path: "trades.csv"  # Path to trade data
+
+strategy:
+  name: "stoikov-limit"
+  params:
+    gamma: 0.1             # Risk aversion parameter (higher = wider spread)
+    kappa: 1.5             # Order arrival rate (lower = wider spread)
+    time_horizon: 300.0    # Time horizon in seconds (5 minutes)
+    order_quantity: 15000.0  # Base order size in units
+    max_inventory: 100000.0  # Maximum inventory limit
+    min_spread: 0.00005    # Minimum spread (5 ticks)
+    refresh_threshold: 0.0001  # Refresh if mid moves > 1bp

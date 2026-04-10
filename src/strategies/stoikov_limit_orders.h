@@ -21,17 +21,17 @@ public:
     };
 
     StoikovLimitOrderStrategy(
-        double gamma = 0.05,              // Risk aversion parameter
-        double kappa = 2.0,                // Order arrival rate
-        double time_horizon = 300.0,       // Time horizon in seconds
+        double gamma = 0.05,              // Risk aversion parameter (γ in paper)
+        double kappa = 2.0,                // Order arrival rate (κ in paper)
+        double time_horizon = 300.0,       // Initial time horizon in seconds (T in paper)
         double order_quantity = 15000.0,   // Base order size
         double max_inventory = 100000.0,   // Maximum inventory
-        double min_spread = 0.00001,       // Minimum spread (1 tick)
-        double refresh_threshold = 0.0002  // Refresh if mid moves > 2bp
+        double min_spread = 0.00001,       // Minimum spread (practical floor, not in paper)
+        double refresh_threshold = 0.0002  // Refresh if mid moves > threshold
     )
         : gamma_(gamma)
         , kappa_(kappa)
-        , time_horizon_(time_horizon)
+        , initial_time_horizon_(time_horizon)
         , order_quantity_(order_quantity)
         , max_inventory_(max_inventory)
         , min_spread_(min_spread)
@@ -39,12 +39,17 @@ public:
         , inventory_(0.0)
         , tick_count_(0)
         , last_mid_price_(0.0)
+        , start_time_(0)
         , volatility_estimator_(1000)
     {}
 
     void on_book_update(uint64_t timestamp, const MarketState& market) override {
-        (void)timestamp;
         tick_count_++;
+
+        // Initialize start time on first update
+        if (start_time_ == 0) {
+            start_time_ = timestamp;
+        }
 
         double mid_price = market.mid_price();
         if (mid_price <= 0.0) return;
@@ -58,34 +63,52 @@ public:
         // Check if we need to refresh quotes
         if (!should_refresh(mid_price)) return;
 
-        // Calculate Stoikov quotes
+        // Calculate time remaining: (T - t) in seconds
+        double elapsed_seconds = (timestamp - start_time_) / 1e6;  // Convert microseconds to seconds
+        double time_remaining = std::max(1.0, initial_time_horizon_ - elapsed_seconds);
+
+        // Get volatility estimate (annualized)
         double sigma = volatility_estimator_.get_volatility();
-        double time_remaining = time_horizon_;
 
         // Convert annualized volatility to per-second volatility in price units
         // sigma is annualized (e.g., 0.5 = 50% per year)
-        // We need sigma in price units per second
+        // We need σ in price units per second
         double seconds_per_year = 31536000.0;  // 365.25 * 24 * 3600
         double sigma_per_second = (mid_price * sigma) / std::sqrt(seconds_per_year);
+        double sigma_squared = sigma_per_second * sigma_per_second;
 
-        // Reservation price: r = mid - q * gamma * sigma^2 * T
-        double reservation_price = mid_price - (inventory_ * gamma_ * sigma_per_second * sigma_per_second * time_remaining);
+        // AVELLANEDA-STOIKOV MODEL FORMULAS:
+
+        // 1. Reservation price: r(s, q, t) = s - q·γ·σ²·(T-t)
+        //    This is the indifference price given current inventory
+        double reservation_price = mid_price - (inventory_ * gamma_ * sigma_squared * time_remaining);
+
+        // 2. Optimal spread: δ* = γ·σ²·(T-t) + (2/γ)·ln(1 + γ/κ)
+        //    First term: inventory risk component
+        //    Second term: order flow/liquidity component
+        double spread_inventory_term = gamma_ * sigma_squared * time_remaining;
+        double spread_liquidity_term = (2.0 / gamma_) * std::log(1.0 + gamma_ / kappa_);
+        double delta = spread_inventory_term + spread_liquidity_term;
+
+        // Practical adjustments (not in theoretical paper):
+        // - Floor at min_spread to avoid crossing quotes
+        // - Cap at reasonable percentage to avoid unrealistic quotes
+        delta = std::max(delta, min_spread_ * 2.0);
+        delta = std::min(delta, mid_price * 0.02);  // Cap at 2% of mid
 
         // Debug output (first time only)
         if (tick_count_ == 100) {
-            std::cout << "Debug: mid=" << mid_price << " sigma_annual=" << sigma
-                      << " sigma_per_sec=" << sigma_per_second << " inv=" << inventory_
-                      << " res_price=" << reservation_price << "\n";
+            std::cout << "A-S Model Debug:\n";
+            std::cout << "  mid=" << mid_price << " σ_annual=" << sigma
+                      << " σ²=" << sigma_squared << "\n";
+            std::cout << "  inventory=" << inventory_ << " time_remaining=" << time_remaining << "s\n";
+            std::cout << "  reservation_price=" << reservation_price << "\n";
+            std::cout << "  spread: inventory_term=" << spread_inventory_term
+                      << " liquidity_term=" << spread_liquidity_term
+                      << " total=" << delta << "\n";
         }
 
-        // Optimal spread: delta = (1/gamma) * ln(1 + gamma/kappa)
-        // Scale spread to be reasonable relative to price (theory gives absolute values)
-        double delta_bps = (1.0 / gamma_) * std::log(1.0 + gamma_ / kappa_);  // In basis points
-        double delta = mid_price * (delta_bps * 0.0001);  // Convert to price units
-        delta = std::max(delta, min_spread_ * 2.0);  // Ensure minimum spread
-        delta = std::min(delta, mid_price * 0.02);   // Cap at 2% of mid price
-
-        // Calculate target bid and ask prices
+        // 3. Optimal quotes: bid = r - δ/2, ask = r + δ/2
         double target_bid = reservation_price - delta / 2.0;
         double target_ask = reservation_price + delta / 2.0;
 
@@ -193,19 +216,22 @@ private:
         submit_order(ask_order);
     }
 
-    // Parameters
-    double gamma_;              // Risk aversion
-    double kappa_;              // Arrival rate
-    double time_horizon_;       // Time horizon (seconds)
+    // Model parameters (Avellaneda-Stoikov)
+    double gamma_;              // Risk aversion parameter (γ)
+    double kappa_;              // Order arrival rate (κ)
+    double initial_time_horizon_;  // Initial time horizon T (seconds)
+
+    // Practical parameters (not in paper)
     double order_quantity_;     // Base order size
     double max_inventory_;      // Maximum inventory
-    double min_spread_;         // Minimum spread
+    double min_spread_;         // Minimum spread (floor)
     double refresh_threshold_;  // Refresh threshold
 
     // State
-    double inventory_;
+    double inventory_;          // Current inventory (q)
     size_t tick_count_;
     double last_mid_price_;
+    uint64_t start_time_;       // Strategy start time for (T-t) calculation
     std::optional<ActiveQuote> active_bid_;
     std::optional<ActiveQuote> active_ask_;
 

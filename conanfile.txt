@@ -1,0 +1,14 @@
+[requires]
+boost/1.84.0
+yaml-cpp/0.8.0
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[options]
+boost/*:header_only=True
+yaml-cpp/*:shared=False
+
+[layout]
+cmake_layout
